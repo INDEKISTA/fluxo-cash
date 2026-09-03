@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts'
-import { Plus, Trash2, DollarSign } from 'lucide-react'
+import { Plus, Trash2, DollarSign, Edit2, Check, X } from 'lucide-react'
 import { db } from '../../firebase'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
@@ -12,21 +12,46 @@ export default function TabGastos({
   user,
   gastos,
   totalGastos,
-  adicionarGasto,
-  deletarGasto
+  isDark
 }) {
   const [novoGastoNome, setNovoGastoNome] = useState('')
   const [novoGastoValor, setNovoGastoValor] = useState('')
   const [novoSalario, setNovoSalario] = useState(salario.toString())
   const [editandoSalario, setEditandoSalario] = useState(false)
+  const [editandoGasto, setEditandoGasto] = useState(null)
+  const [editarNome, setEditarNome] = useState('')
+  const [editarValor, setEditarValor] = useState('')
+
+  // Filtrar gastos do mês atual
+  const mesAtual = new Date().getMonth()
+  const anoAtual = new Date().getFullYear()
+
+  const gastosMes = gastos.filter(g => {
+    const data = new Date(g.data?.toDate?.() || g.data)
+    return data.getMonth() === mesAtual && data.getFullYear() === anoAtual
+  })
+
+  const totalGastosMes = gastosMes.reduce((acc, g) => acc + g.valor, 0)
 
   const handleAdicionarGasto = async (e) => {
     e.preventDefault()
     if (!novoGastoNome || !novoGastoValor) return
 
-    await adicionarGasto(novoGastoNome, novoGastoValor)
-    setNovoGastoNome('')
-    setNovoGastoValor('')
+    try {
+      const novoGastoId = Date.now().toString()
+      await setDoc(doc(db, 'usuarios', user.uid, 'dados', novoGastoId), {
+        tipo: 'gasto',
+        nome: novoGastoNome,
+        valor: parseFloat(novoGastoValor),
+        data: new Date(),
+        pago: false
+      })
+      setNovoGastoNome('')
+      setNovoGastoValor('')
+    } catch (error) {
+      console.error('Erro ao adicionar gasto:', error)
+      alert('Erro ao adicionar gasto: ' + error.message)
+    }
   }
 
   const handleSalvarSalario = async () => {
@@ -45,9 +70,47 @@ export default function TabGastos({
     }
   }
 
+  const handleDeletarGasto = async (id) => {
+    if (!window.confirm('Tem certeza que deseja deletar este gasto?')) return
+
+    try {
+      await deleteDoc(doc(db, 'usuarios', user.uid, 'dados', id))
+    } catch (error) {
+      console.error('Erro ao deletar gasto:', error)
+      alert('Erro ao deletar: ' + error.message)
+    }
+  }
+
+  const handleEditarGasto = (gasto) => {
+    setEditandoGasto(gasto.id)
+    setEditarNome(gasto.nome)
+    setEditarValor(gasto.valor.toString())
+  }
+
+  const handleSalvarEdicao = async (id) => {
+    if (!editarNome || !editarValor) return
+
+    try {
+      await updateDoc(doc(db, 'usuarios', user.uid, 'dados', id), {
+        nome: editarNome,
+        valor: parseFloat(editarValor)
+      })
+      setEditandoGasto(null)
+    } catch (error) {
+      console.error('Erro ao editar gasto:', error)
+      alert('Erro ao editar: ' + error.message)
+    }
+  }
+
+  const handleCancelarEdicao = () => {
+    setEditandoGasto(null)
+    setEditarNome('')
+    setEditarValor('')
+  }
+
   // Preparar dados para gráfico
   const gastosPorCategoria = {}
-  gastos.forEach(g => {
+  gastosMes.forEach(g => {
     if (!gastosPorCategoria[g.nome]) {
       gastosPorCategoria[g.nome] = 0
     }
@@ -59,13 +122,15 @@ export default function TabGastos({
     value: parseFloat(valor.toFixed(2))
   }))
 
-  const saldo = salario - totalGastos
-  const percentualGasto = salario > 0 ? (totalGastos / salario * 100).toFixed(1) : 0
+  const saldo = salario - totalGastosMes
+  const percentualGasto = salario > 0 ? (totalGastosMes / salario * 100).toFixed(1) : 0
+
+  const nomeMes = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
   return (
     <div className="space-y-6">
       {/* Seção Salário */}
-      <div className="bg-gradient-to-r from-primary to-secondary text-white p-6 rounded-lg">
+      <div className={`bg-gradient-to-r from-green-500 to-blue-500 dark:from-green-700 dark:to-blue-700 text-white p-6 rounded-lg transition-colors`}>
         <div className="flex justify-between items-center">
           <div>
             <p className="text-sm opacity-90">Salário do Mês</p>
@@ -78,7 +143,7 @@ export default function TabGastos({
           </div>
           <button
             onClick={() => setEditandoSalario(!editandoSalario)}
-            className="bg-white text-primary px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 transition"
+            className="bg-white dark:bg-gray-800 text-green-600 dark:text-yellow-400 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
           >
             {editandoSalario ? 'Cancelar' : 'Editar'}
           </button>
@@ -95,7 +160,7 @@ export default function TabGastos({
             />
             <button
               onClick={handleSalvarSalario}
-              className="bg-white text-primary px-4 py-2 rounded font-semibold hover:bg-gray-100"
+              className="bg-white dark:bg-gray-800 text-green-600 dark:text-yellow-400 px-4 py-2 rounded font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
             >
               Salvar
             </button>
@@ -106,8 +171,10 @@ export default function TabGastos({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico */}
         {chartData.length > 0 ? (
-          <div className="bg-white p-4 rounded-lg border">
-            <h3 className="font-bold text-lg mb-4">Distribuição de Gastos</h3>
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'} p-4 rounded-lg border transition-colors`}>
+            <h3 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Distribuição de Gastos - {nomeMes}
+            </h3>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -127,10 +194,11 @@ export default function TabGastos({
                 <Tooltip
                   formatter={(value) => `R$ ${value.toFixed(2)}`}
                   contentStyle={{
-                    backgroundColor: '#fff',
+                    backgroundColor: isDark ? '#1f2937' : '#fff',
                     border: '1px solid #10b981',
                     borderRadius: '8px',
-                    padding: '8px'
+                    padding: '8px',
+                    color: isDark ? '#fff' : '#000'
                   }}
                 />
                 <Legend />
@@ -138,21 +206,27 @@ export default function TabGastos({
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="bg-gray-100 p-6 rounded-lg text-center">
-            <p className="text-gray-600">Nenhum gasto registrado ainda</p>
+          <div className={`${isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'} p-6 rounded-lg text-center transition-colors`}>
+            <p>Nenhum gasto registrado neste mês</p>
           </div>
         )}
 
         {/* Adicionar Gasto */}
         <div className="space-y-4">
-          <h3 className="font-bold text-lg">Adicionar Novo Gasto</h3>
+          <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Adicionar Novo Gasto
+          </h3>
           <form onSubmit={handleAdicionarGasto} className="space-y-3">
             <input
               type="text"
               placeholder="Nome do gasto (ex: Supermercado)"
               value={novoGastoNome}
               onChange={(e) => setNovoGastoNome(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-green-500 transition ${
+                isDark 
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
+                  : 'bg-white border-gray-300 text-black'
+              }`}
               required
             />
             <input
@@ -161,24 +235,28 @@ export default function TabGastos({
               value={novoGastoValor}
               onChange={(e) => setNovoGastoValor(e.target.value)}
               step="0.01"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-green-500 transition ${
+                isDark 
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
+                  : 'bg-white border-gray-300 text-black'
+              }`}
               required
             />
             <button
               type="submit"
-              className="w-full bg-primary hover:bg-green-600 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition"
+              className="w-full bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition"
             >
               <Plus size={20} /> Adicionar Gasto
             </button>
           </form>
 
           {/* Resumo Rápido */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <p className="text-sm font-semibold text-blue-900 mb-2">📊 Resumo</p>
-            <div className="space-y-1 text-sm text-blue-800">
-              <p>Total: R$ {totalGastos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <div className={`${isDark ? 'bg-blue-900 border-blue-800 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-900'} p-4 rounded-lg border transition-colors`}>
+            <p className="text-sm font-semibold mb-2">📊 Resumo de {nomeMes}</p>
+            <div className="space-y-1 text-sm">
+              <p>Total: R$ {totalGastosMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               <p>Percentual: {percentualGasto}%</p>
-              <p className={saldo >= 0 ? 'text-green-700' : 'text-red-700'}>
+              <p className={saldo >= 0 ? (isDark ? 'text-green-400' : 'text-green-700') : (isDark ? 'text-red-400' : 'text-red-700')}>
                 Saldo: R$ {saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </div>
@@ -187,35 +265,89 @@ export default function TabGastos({
       </div>
 
       {/* Lista de Gastos */}
-      {gastos.length > 0 && (
+      {gastosMes.length > 0 && (
         <div>
-          <h3 className="font-bold text-lg mb-4">Seus Gastos</h3>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {gastos.map(gasto => (
+          <h3 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Seus Gastos de {nomeMes}
+          </h3>
+          <div className={`space-y-2 max-h-96 overflow-y-auto p-2 ${isDark ? 'bg-gray-800 rounded-lg' : ''}`}>
+            {gastosMes.map(gasto => (
               <div
                 key={gasto.id}
-                className="flex justify-between items-center bg-gray-50 p-4 rounded-lg hover:bg-gray-100 transition"
+                className={`flex justify-between items-center p-4 rounded-lg transition ${
+                  isDark 
+                    ? 'bg-gray-700 hover:bg-gray-600' 
+                    : 'bg-gray-50 hover:bg-gray-100'
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <DollarSign size={20} className="text-primary" />
-                  <div>
-                    <p className="font-semibold">{gasto.nome}</p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(gasto.data?.toDate?.() || gasto.data).toLocaleDateString('pt-BR')}
-                    </p>
+                {editandoGasto === gasto.id ? (
+                  <div className="flex gap-2 flex-1">
+                    <input
+                      type="text"
+                      value={editarNome}
+                      onChange={(e) => setEditarNome(e.target.value)}
+                      className={`flex-1 px-2 py-1 rounded text-sm ${
+                        isDark 
+                          ? 'bg-gray-600 text-white' 
+                          : 'bg-white text-black border border-gray-300'
+                      }`}
+                    />
+                    <input
+                      type="number"
+                      value={editarValor}
+                      onChange={(e) => setEditarValor(e.target.value)}
+                      step="0.01"
+                      className={`w-24 px-2 py-1 rounded text-sm ${
+                        isDark 
+                          ? 'bg-gray-600 text-white' 
+                          : 'bg-white text-black border border-gray-300'
+                      }`}
+                    />
+                    <button
+                      onClick={() => handleSalvarEdicao(gasto.id)}
+                      className="bg-green-500 hover:bg-green-600 text-white p-1 rounded transition"
+                    >
+                      <Check size={16} />
+                    </button>
+                    <button
+                      onClick={handleCancelarEdicao}
+                      className="bg-gray-500 hover:bg-gray-600 text-white p-1 rounded transition"
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <p className="font-bold text-primary">
-                    R$ {gasto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
-                  <button
-                    onClick={() => deletarGasto(gasto.id)}
-                    className="text-red-500 hover:bg-red-50 p-2 rounded transition"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <DollarSign size={20} className="text-green-500 dark:text-green-400" />
+                      <div>
+                        <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {gasto.nome}
+                        </p>
+                        <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          {new Date(gasto.data?.toDate?.() || gasto.data).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <p className="font-bold text-green-600 dark:text-green-400">
+                        R$ {gasto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                      <button
+                        onClick={() => handleEditarGasto(gasto)}
+                        className={`${isDark ? 'text-blue-400 hover:bg-blue-900' : 'text-blue-500 hover:bg-blue-50'} p-2 rounded transition`}
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDeletarGasto(gasto.id)}
+                        className={`${isDark ? 'text-red-400 hover:bg-red-900' : 'text-red-500 hover:bg-red-50'} p-2 rounded transition`}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>

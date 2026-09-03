@@ -1,17 +1,36 @@
 import { useState, useEffect, useContext } from 'react'
 import { auth, db } from '../firebase'
 import { signOut } from 'firebase/auth'
-import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
-import { LogOut, Plus, Trash2, DollarSign } from 'lucide-react'
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore'
+import { LogOut } from 'lucide-react'
 import { ThemeContext } from '../ThemeContext'
 import TabGastos from './tabs/TabGastos'
+import TabPerfil from './tabs/TabPerfil'
 
 export default function Dashboard({ user }) {
   const { isDark, toggleTheme } = useContext(ThemeContext)
   const [activeTab, setActiveTab] = useState('gastos')
   const [gastos, setGastos] = useState([])
   const [salario, setSalario] = useState(0)
+  const [nomePerfil, setNomePerfil] = useState('')
 
+  // Carregar perfil do usuário
+  useEffect(() => {
+    const carregarPerfil = async () => {
+      try {
+        const docRef = doc(db, 'usuarios', user.uid, 'dados', 'perfil')
+        const docSnap = await getDoc(docRef)
+        if (docSnap.exists()) {
+          setNomePerfil(docSnap.data().nome || '')
+        }
+      } catch (error) {
+        console.error('Erro ao carregar perfil:', error)
+      }
+    }
+    carregarPerfil()
+  }, [user])
+
+  // Monitorar gastos e salário em tempo real
   useEffect(() => {
     if (!user) return
     const q = query(collection(db, 'usuarios', user.uid, 'dados'))
@@ -35,15 +54,18 @@ export default function Dashboard({ user }) {
   const totalGastos = gastos.reduce((a, g) => a + g.valor, 0)
   const saldo = salario - totalGastos
 
+  // Exibir nome do perfil ou email
+  const nomeExibicao = nomePerfil || user.email.split('@')[0]
+
   return (
     <div className={isDark ? 'dark' : ''}>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
         {/* Header */}
-        <header className="bg-gradient-to-r from-green-500 to-blue-500 dark:from-green-700 dark:to-blue-700 text-white p-4 shadow-lg transition-colors">
+        <header className="bg-gradient-to-r from-green-500 to-blue-500 dark:from-green-700 dark:to-blue-700 text-white p-4 shadow-lg transition-colors sticky top-0 z-50">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold">💰 FLUXO CASH</h1>
-              <p className="text-sm text-gray-200 dark:text-gray-300">Olá, {user.email}</p>
+              <p className="text-sm text-gray-200 dark:text-gray-300">Olá, {nomeExibicao}</p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -98,12 +120,12 @@ export default function Dashboard({ user }) {
 
           {/* Abas */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg transition-colors">
-            <div className="flex border-b dark:border-gray-700">
-              {['gastos', 'parceladas', 'dicas'].map(tab => (
+            <div className="flex border-b dark:border-gray-700 overflow-x-auto">
+              {['gastos', 'parceladas', 'dicas', 'perfil'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`flex-1 py-4 px-6 font-semibold transition ${
+                  className={`flex-shrink-0 py-4 px-6 font-semibold transition ${
                     activeTab === tab
                       ? 'border-b-4 border-green-600 dark:border-green-400 text-green-600 dark:text-green-400'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
@@ -112,6 +134,7 @@ export default function Dashboard({ user }) {
                   {tab === 'gastos' && '💳 Gastos'}
                   {tab === 'parceladas' && '📊 Parceladas'}
                   {tab === 'dicas' && '💡 Dicas'}
+                  {tab === 'perfil' && '👤 Perfil'}
                 </button>
               ))}
             </div>
@@ -126,6 +149,32 @@ export default function Dashboard({ user }) {
                   totalGastos={totalGastos}
                   isDark={isDark}
                 />
+              )}
+
+              {activeTab === 'parceladas' && (
+                <div className="text-center py-12">
+                  <p className="text-lg text-gray-500 dark:text-gray-400">
+                    📊 Funcionalidade em desenvolvimento
+                  </p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                    Em breve você poderá gerenciar suas parceladas aqui
+                  </p>
+                </div>
+              )}
+
+              {activeTab === 'dicas' && (
+                <div className="text-center py-12">
+                  <p className="text-lg text-gray-500 dark:text-gray-400">
+                    💡 Funcionalidade em desenvolvimento
+                  </p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                    Em breve você receberá dicas personalizadas de economia
+                  </p>
+                </div>
+              )}
+
+              {activeTab === 'perfil' && (
+                <TabPerfil user={user} isDark={isDark} />
               )}
             </div>
           </div>
