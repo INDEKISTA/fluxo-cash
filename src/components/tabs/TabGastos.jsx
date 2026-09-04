@@ -1,20 +1,13 @@
 import { useState, useEffect } from 'react'
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Plus, Trash2, DollarSign, Edit2, Check, X } from 'lucide-react'
 import { db } from '../../firebase'
 import { doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore'
-import { CATEGORIAS_PADRAO, obterCategoria } from '../../categorias'
+import { CATEGORIAS_PADRAO } from '../../categorias'
 
 const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#06b6d4', '#14b8a6', '#6366f1', '#6b7280']
 
-export default function TabGastos({
-  salario,
-  setSalario,
-  user,
-  gastos,
-  totalGastos,
-  isDark
-}) {
+export default function TabGastos({ salario, setSalario, user, gastos, totalGastos, isDark }) {
   const [novoGastoNome, setNovoGastoNome] = useState('')
   const [novoGastoValor, setNovoGastoValor] = useState('')
   const [novoGastoCategoria, setNovoGastoCategoria] = useState('outros')
@@ -27,10 +20,16 @@ export default function TabGastos({
   const [categorias, setCategorias] = useState(CATEGORIAS_PADRAO)
   const [mostrarsAdicionarCategoria, setMostrarAdicionarCategoria] = useState(false)
   const [novaCategoriaNome, setNovaCategoriaNome] = useState('')
+  const [meta, setMeta] = useState(0)
+  const [editandoMeta, setEditandoMeta] = useState(false)
+  const [novoMeta, setNovoMeta] = useState('0')
 
-  // Carregar categorias personalizadas do Firestore
   useEffect(() => {
     carregarCategorias()
+  }, [user])
+
+  useEffect(() => {
+    carregarMeta()
   }, [user])
 
   const carregarCategorias = async () => {
@@ -50,6 +49,20 @@ export default function TabGastos({
     }
   }
 
+  const carregarMeta = async () => {
+    try {
+      const docRef = doc(db, 'usuarios', user.uid, 'dados', 'meta')
+      const docSnap = await getDoc(docRef)
+      
+      if (docSnap.exists()) {
+        setMeta(docSnap.data().valor || 0)
+        setNovoMeta(docSnap.data().valor?.toString() || '0')
+      }
+    } catch (error) {
+      console.error('Erro ao carregar meta:', error)
+    }
+  }
+
   const salvarCategoriasNoFirestore = async (novasCategorias) => {
     try {
       const categoriasPersonalizadas = novasCategorias.filter(
@@ -66,7 +79,6 @@ export default function TabGastos({
     }
   }
 
-  // Filtrar gastos do mês atual
   const mesAtual = new Date().getMonth()
   const anoAtual = new Date().getFullYear()
 
@@ -170,7 +182,6 @@ export default function TabGastos({
     const novasCategorias = [...categorias, novaCategoria]
     setCategorias(novasCategorias)
     
-    // Salvar no Firestore
     await salvarCategoriasNoFirestore(novasCategorias)
     
     setNovaCategoriaNome('')
@@ -178,26 +189,55 @@ export default function TabGastos({
   }
 
   const handleDeletarCategoria = async (idCategoria) => {
-    if (!window.confirm('Tem certeza que deseja deletar esta categoria? Os gastos dela continuarão salvos.')) return
+    if (!window.confirm('Tem certeza que deseja deletar esta categoria?')) return
 
     const novasCategorias = categorias.filter(c => c.id !== idCategoria)
     setCategorias(novasCategorias)
     
-    // Salvar no Firestore
     await salvarCategoriasNoFirestore(novasCategorias)
   }
 
-  // Preparar dados para gráfico
+  const handleSalvarMeta = async () => {
+    const valorMeta = parseFloat(novoMeta)
+    if (valorMeta < 0) return
+
+    try {
+      await setDoc(doc(db, 'usuarios', user.uid, 'dados', 'meta'), {
+        tipo: 'meta',
+        valor: valorMeta,
+        mes: mesAtual,
+        ano: anoAtual
+      })
+      setMeta(valorMeta)
+      setEditandoMeta(false)
+    } catch (error) {
+      console.error('Erro ao salvar meta:', error)
+    }
+  }
+
+  const handleDeletarMeta = async () => {
+    setMeta(0)
+    setNovoMeta('0')
+    try {
+      await setDoc(doc(db, 'usuarios', user.uid, 'dados', 'meta'), {
+        tipo: 'meta',
+        valor: 0
+      })
+    } catch (error) {
+      console.error('Erro ao deletar meta:', error)
+    }
+  }
+
   const gastosPorCategoria = {}
   gastosMes.forEach(g => {
-    const categoria = categorias.find(c => c.id === (g.categoria || 'outros')) || obterCategoria(g.categoria || 'outros')
-    const chave = categoria.nome
+    const categoria = categorias.find(c => c.id === (g.categoria || 'outros'))
+    const chave = categoria?.nome || 'Outros'
     if (!gastosPorCategoria[chave]) {
       gastosPorCategoria[chave] = {
         value: 0,
-        cor: categoria.cor,
-        emoji: categoria.emoji,
-        id: categoria.id
+        cor: categoria?.cor || '#6b7280',
+        emoji: categoria?.emoji || '✅',
+        id: categoria?.id || 'outros'
       }
     }
     gastosPorCategoria[chave].value += g.valor
@@ -211,13 +251,24 @@ export default function TabGastos({
 
   const saldo = salario - totalGastosMes
   const percentualGasto = salario > 0 ? (totalGastosMes / salario * 100).toFixed(1) : 0
-
   const nomeMes = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  const maiorGasto = Object.entries(gastosPorCategoria).length > 0 
+    ? Object.entries(gastosPorCategoria).reduce((a, b) => b[1].value > a[1].value ? b : a)
+    : null
+
+  const menorGasto = Object.entries(gastosPorCategoria).length > 0
+    ? Object.entries(gastosPorCategoria).reduce((a, b) => b[1].value < a[1].value ? b : a)
+    : null
+
+  const mediaGasto = Object.keys(gastosPorCategoria).length > 0
+    ? totalGastosMes / Object.keys(gastosPorCategoria).length
+    : 0
 
   return (
     <div className="space-y-6">
-      {/* Seção Salário */}
-      <div className={`bg-gradient-to-r from-green-500 to-blue-500 dark:from-green-700 dark:to-blue-700 text-white p-6 rounded-lg transition-colors`}>
+      {/* Salário */}
+      <div className={`bg-gradient-to-r from-green-500 to-blue-500 dark:from-green-700 dark:to-blue-700 text-white p-6 rounded-lg`}>
         <div className="flex justify-between items-center">
           <div>
             <p className="text-sm opacity-90">Salário do Mês</p>
@@ -230,7 +281,7 @@ export default function TabGastos({
           </div>
           <button
             onClick={() => setEditandoSalario(!editandoSalario)}
-            className="bg-white dark:bg-gray-800 text-green-600 dark:text-yellow-400 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+            className="bg-white dark:bg-gray-800 text-green-600 dark:text-yellow-400 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100"
           >
             {editandoSalario ? 'Cancelar' : 'Editar'}
           </button>
@@ -247,7 +298,7 @@ export default function TabGastos({
             />
             <button
               onClick={handleSalvarSalario}
-              className="bg-white dark:bg-gray-800 text-green-600 dark:text-yellow-400 px-4 py-2 rounded font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              className="bg-white dark:bg-gray-800 text-green-600 dark:text-yellow-400 px-4 py-2 rounded font-semibold hover:bg-gray-100"
             >
               Salvar
             </button>
@@ -255,63 +306,203 @@ export default function TabGastos({
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfico */}
-        {chartData.length > 0 ? (
-          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'} p-4 rounded-lg border transition-colors`}>
-            <h3 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Distribuição de Gastos - {nomeMes}
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: R$ ${value.toFixed(2)}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
+      {/* Meta de Economia */}
+      <div className={`${isDark ? 'bg-gradient-to-r from-purple-900 to-pink-900' : 'bg-gradient-to-r from-purple-100 to-pink-100'} p-6 rounded-lg`}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            🎯 Meta - {nomeMes}
+          </h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditandoMeta(!editandoMeta)}
+              className={`px-3 py-1 rounded font-semibold ${
+                isDark 
+                  ? 'bg-white text-purple-600 hover:bg-gray-100' 
+                  : 'bg-white text-purple-600 hover:bg-gray-50'
+              }`}
+            >
+              {editandoMeta ? 'Cancelar' : 'Editar'}
+            </button>
+            {meta > 0 && !editandoMeta && (
+              <button
+                onClick={handleDeletarMeta}
+                className="px-3 py-1 rounded bg-red-500 hover:bg-red-600 text-white font-semibold"
+              >
+                Deletar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {editandoMeta && (
+          <div className="flex gap-2 mb-4">
+            <input
+              type="number"
+              value={novoMeta}
+              onChange={(e) => setNovoMeta(e.target.value)}
+              placeholder="Digite sua meta"
+              className={`flex-1 px-3 py-2 rounded ${isDark ? 'bg-gray-800 text-white' : 'bg-white text-black'}`}
+              step="0.01"
+            />
+            <button
+              onClick={handleSalvarMeta}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded font-semibold"
+            >
+              Salvar
+            </button>
+          </div>
+        )}
+
+        <div className={`mb-4 p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+          <div className="flex justify-between mb-2">
+            <span className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Meta: R$ {meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+            <span className={`font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+              Saldo: R$ {saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          
+          {meta > 0 ? (
+            <>
+              <div className={`w-full h-6 rounded-full overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-300'}`}>
+                <div
+                  className={`h-full transition-all duration-500 flex items-center justify-center text-xs font-bold text-white ${
+                    saldo >= meta
+                      ? 'bg-gradient-to-r from-green-500 to-green-600'
+                      : 'bg-gradient-to-r from-yellow-500 to-orange-500'
+                  }`}
+                  style={{ width: `${Math.min((saldo / meta) * 100, 100)}%` }}
                 >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value) => `R$ ${value.toFixed(2)}`}
-                  contentStyle={{
-                    backgroundColor: isDark ? '#1f2937' : '#fff',
-                    border: '1px solid #10b981',
-                    borderRadius: '8px',
-                    padding: '8px',
-                    color: isDark ? '#fff' : '#000'
-                  }}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+                  {saldo > 0 && Math.round((saldo / meta) * 100)}%
+                </div>
+              </div>
+              
+              <div className="mt-3 text-center">
+                {saldo >= meta ? (
+                  <div className="p-3 rounded-lg bg-green-900 text-green-200">
+                    <p className="font-bold text-lg">🎉 META ATINGIDA!</p>
+                    <p className="text-sm">Economizou R$ {(saldo - meta).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!</p>
+                  </div>
+                ) : (
+                  <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                    Faltam <span className="font-bold text-orange-500">R$ {(meta - saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className={`text-center py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              Defina uma meta! 🎯
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Gráfico + Cards */}
+        {chartData.length > 0 ? (
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'} p-6 rounded-lg border`}>
+            <h3 className={`font-bold text-lg mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              📊 Distribuição - {nomeMes}
+            </h3>
+            <div className="grid grid-cols-3 gap-4 items-center">
+              {/* Gráfico */}
+              <div className="col-span-2">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={90}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => `R$ ${value.toFixed(2)}`}
+                      contentStyle={{
+                        backgroundColor: isDark ? '#1f2937' : '#fff',
+                        border: '1px solid #10b981',
+                        borderRadius: '8px',
+                        color: isDark ? '#fff' : '#000'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Cards */}
+              <div className="space-y-3 col-span-1">
+                {maiorGasto && (
+                  <div className={`p-3 rounded-lg ${isDark ? 'bg-red-900 text-red-200' : 'bg-red-50 text-red-900'}`}>
+                    <p className="text-xs font-semibold opacity-75">💰 Maior</p>
+                    <p className="font-bold text-sm mt-1">{maiorGasto[0].split(' ')[1]}</p>
+                    <p className="text-xs mt-1">R$ {maiorGasto[1].value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                )}
+
+                {menorGasto && (
+                  <div className={`p-3 rounded-lg ${isDark ? 'bg-green-900 text-green-200' : 'bg-green-50 text-green-900'}`}>
+                    <p className="text-xs font-semibold opacity-75">📉 Menor</p>
+                    <p className="font-bold text-sm mt-1">{menorGasto[0].split(' ')[1]}</p>
+                    <p className="text-xs mt-1">R$ {menorGasto[1].value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                )}
+
+                <div className={`p-3 rounded-lg ${isDark ? 'bg-blue-900 text-blue-200' : 'bg-blue-50 text-blue-900'}`}>
+                  <p className="text-xs font-semibold opacity-75">📊 Média</p>
+                  <p className="font-bold text-sm mt-1">{Object.keys(gastosPorCategoria).length} cats</p>
+                  <p className="text-xs mt-1">R$ {mediaGasto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Legenda */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">
+              {chartData.map((item, index) => (
+                <div key={index} className={`flex items-center gap-2 p-2 rounded ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <div 
+                    className="w-3 h-3 rounded-full flex-shrink-0" 
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <div className="min-w-0">
+                    <p className={`text-xs font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {item.name}
+                    </p>
+                    <p className={`text-xs ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                      R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
-          <div className={`${isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'} p-6 rounded-lg text-center transition-colors`}>
-            <p>Nenhum gasto registrado neste mês</p>
+          <div className={`${isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'} p-6 rounded-lg text-center`}>
+            <p>Nenhum gasto registrado</p>
           </div>
         )}
 
         {/* Adicionar Gasto */}
         <div className="space-y-4">
           <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Adicionar Novo Gasto
+            Adicionar Gasto
           </h3>
           <form onSubmit={handleAdicionarGasto} className="space-y-3">
             <input
               type="text"
-              placeholder="Nome do gasto (ex: Supermercado)"
+              placeholder="Nome"
               value={novoGastoNome}
               onChange={(e) => setNovoGastoNome(e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-green-500 transition ${
+              className={`w-full px-4 py-2 border rounded-lg ${
                 isDark 
-                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
+                  ? 'bg-gray-800 border-gray-700 text-white' 
                   : 'bg-white border-gray-300 text-black'
               }`}
               required
@@ -320,7 +511,7 @@ export default function TabGastos({
             <select
               value={novoGastoCategoria}
               onChange={(e) => setNovoGastoCategoria(e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-green-500 transition ${
+              className={`w-full px-4 py-2 border rounded-lg ${
                 isDark 
                   ? 'bg-gray-800 border-gray-700 text-white' 
                   : 'bg-white border-gray-300 text-black'
@@ -335,13 +526,13 @@ export default function TabGastos({
 
             <input
               type="number"
-              placeholder="Valor (ex: 150.50)"
+              placeholder="Valor"
               value={novoGastoValor}
               onChange={(e) => setNovoGastoValor(e.target.value)}
               step="0.01"
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-green-500 transition ${
+              className={`w-full px-4 py-2 border rounded-lg ${
                 isDark 
-                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
+                  ? 'bg-gray-800 border-gray-700 text-white' 
                   : 'bg-white border-gray-300 text-black'
               }`}
               required
@@ -349,50 +540,49 @@ export default function TabGastos({
 
             <button
               type="submit"
-              className="w-full bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-800 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition"
+              className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2"
             >
-              <Plus size={20} /> Adicionar Gasto
+              <Plus size={20} /> Adicionar
             </button>
 
             <button
               type="button"
               onClick={() => setMostrarAdicionarCategoria(!mostrarsAdicionarCategoria)}
-              className={`w-full py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition ${
+              className={`w-full py-2 rounded-lg font-bold ${
                 isDark
                   ? 'bg-blue-900 hover:bg-blue-800 text-blue-200'
                   : 'bg-blue-100 hover:bg-blue-200 text-blue-900'
               }`}
             >
-              <Plus size={20} /> Adicionar Categoria
+              <Plus size={16} className="inline mr-2" /> Categoria
             </button>
 
             {mostrarsAdicionarCategoria && (
               <div className={`p-4 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-300'}`}>
                 <input
                   type="text"
-                  placeholder="Nome da nova categoria"
+                  placeholder="Nome"
                   value={novaCategoriaNome}
                   onChange={(e) => setNovaCategoriaNome(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded mb-2 focus:outline-none focus:border-blue-500 ${
+                  className={`w-full px-3 py-2 border rounded mb-2 ${
                     isDark
-                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                      ? 'bg-gray-700 border-gray-600 text-white'
                       : 'bg-white border-gray-300 text-black'
                   }`}
                 />
                 <button
                   type="button"
                   onClick={handleAdicionarCategoria}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-1 rounded transition"
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-1 rounded"
                 >
-                  Criar Categoria
+                  Criar
                 </button>
               </div>
             )}
           </form>
 
-          {/* Resumo Rápido */}
-          <div className={`${isDark ? 'bg-blue-900 border-blue-800 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-900'} p-4 rounded-lg border transition-colors`}>
-            <p className="text-sm font-semibold mb-2">📊 Resumo de {nomeMes}</p>
+          <div className={`${isDark ? 'bg-blue-900 border-blue-800 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-900'} p-4 rounded-lg border`}>
+            <p className="text-sm font-semibold mb-2">📊 Resumo</p>
             <div className="space-y-1 text-sm">
               <p>Total: R$ {totalGastosMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               <p>Percentual: {percentualGasto}%</p>
@@ -404,17 +594,17 @@ export default function TabGastos({
         </div>
       </div>
 
-      {/* Gerenciar Categorias Personalizadas */}
+      {/* Categorias */}
       {categorias.length > CATEGORIAS_PADRAO.length && (
         <div>
           <h3 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            ⚙️ Suas Categorias Personalizadas
+            ⚙️ Categorias
           </h3>
-          <div className={`grid grid-cols-2 md:grid-cols-4 gap-3`}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {categorias.filter(c => !CATEGORIAS_PADRAO.find(p => p.id === c.id)).map(cat => (
               <div
                 key={cat.id}
-                className={`p-3 rounded-lg flex items-center justify-between transition ${
+                className={`p-3 rounded-lg flex items-center justify-between ${
                   isDark 
                     ? 'bg-gray-800 hover:bg-gray-700' 
                     : 'bg-gray-50 hover:bg-gray-100'
@@ -428,7 +618,7 @@ export default function TabGastos({
                 </div>
                 <button
                   onClick={() => handleDeletarCategoria(cat.id)}
-                  className={`${isDark ? 'text-red-400 hover:bg-red-900' : 'text-red-500 hover:bg-red-50'} p-1 rounded transition`}
+                  className={`${isDark ? 'text-red-400 hover:bg-red-900' : 'text-red-500 hover:bg-red-50'} p-1 rounded`}
                 >
                   <Trash2 size={16} />
                 </button>
@@ -438,13 +628,13 @@ export default function TabGastos({
         </div>
       )}
 
-      {/* Lista de Gastos por Categoria */}
+      {/* Lista de Gastos */}
       {gastosMes.length > 0 && (
         <div>
           <h3 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Seus Gastos de {nomeMes}
+            Gastos de {nomeMes}
           </h3>
-          <div className={`space-y-4 max-h-96 overflow-y-auto p-2 ${isDark ? 'bg-gray-800 rounded-lg' : ''}`}>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
             {Object.entries(gastosPorCategoria).map(([nomeCat, dados]) => (
               <div key={nomeCat} className={`${isDark ? 'bg-gray-700 rounded-lg overflow-hidden' : 'bg-gray-50 rounded-lg border border-gray-200'}`}>
                 <div className={`p-3 flex items-center gap-2 font-semibold ${isDark ? 'bg-gray-600' : 'bg-gray-100'}`} style={{ borderLeft: `4px solid ${dados.cor}` }}>
@@ -458,7 +648,7 @@ export default function TabGastos({
                   {gastosMes.filter(g => (g.categoria || 'outros') === dados.id).map(gasto => (
                     <div
                       key={gasto.id}
-                      className={`flex justify-between items-center p-3 rounded transition ${
+                      className={`flex justify-between items-center p-3 rounded ${
                         isDark 
                           ? 'bg-gray-600 hover:bg-gray-500' 
                           : 'bg-white hover:bg-gray-50'
@@ -504,13 +694,13 @@ export default function TabGastos({
                           />
                           <button
                             onClick={() => handleSalvarEdicao(gasto.id)}
-                            className="bg-green-500 hover:bg-green-600 text-white p-1 rounded transition"
+                            className="bg-green-500 hover:bg-green-600 text-white p-1 rounded"
                           >
                             <Check size={16} />
                           </button>
                           <button
                             onClick={handleCancelarEdicao}
-                            className="bg-gray-500 hover:bg-gray-600 text-white p-1 rounded transition"
+                            className="bg-gray-500 hover:bg-gray-600 text-white p-1 rounded"
                           >
                             <X size={16} />
                           </button>
@@ -534,13 +724,13 @@ export default function TabGastos({
                             </p>
                             <button
                               onClick={() => handleEditarGasto(gasto)}
-                              className={`${isDark ? 'text-blue-400 hover:bg-blue-900' : 'text-blue-500 hover:bg-blue-50'} p-2 rounded transition`}
+                              className={`${isDark ? 'text-blue-400 hover:bg-blue-900' : 'text-blue-500 hover:bg-blue-50'} p-2 rounded`}
                             >
                               <Edit2 size={18} />
                             </button>
                             <button
                               onClick={() => handleDeletarGasto(gasto.id)}
-                              className={`${isDark ? 'text-red-400 hover:bg-red-900' : 'text-red-500 hover:bg-red-50'} p-2 rounded transition`}
+                              className={`${isDark ? 'text-red-400 hover:bg-red-900' : 'text-red-500 hover:bg-red-50'} p-2 rounded`}
                             >
                               <Trash2 size={18} />
                             </button>
