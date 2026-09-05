@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { Plus, Trash2, DollarSign, Edit2, Check, X } from 'lucide-react'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
+import { Plus, Trash2, DollarSign, Edit2, Check, X, TrendingUp, TrendingDown } from 'lucide-react'
 import { db } from '../../firebase'
 import { doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore'
 import { CATEGORIAS_PADRAO } from '../../categorias'
@@ -88,6 +88,27 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
   })
 
   const totalGastosMes = gastosMes.reduce((acc, g) => acc + g.valor, 0)
+
+  // Calcular gastos dos últimos 3 meses
+  const calcularGastosMes = (mes, ano) => {
+    return gastos.filter(g => {
+      const data = new Date(g.data?.toDate?.() || g.data)
+      return data.getMonth() === mes && data.getFullYear() === ano
+    }).reduce((acc, g) => acc + g.valor, 0)
+  }
+
+  const setembro = calcularGastosMes(8, 2026)
+  const agosto = calcularGastosMes(7, 2026)
+  const julho = calcularGastosMes(6, 2026)
+
+  const dadosComparativo = [
+    { mes: 'Julho', valor: julho },
+    { mes: 'Agosto', valor: agosto },
+    { mes: 'Setembro', valor: setembro }
+  ]
+
+  const diferenca = setembro - agosto
+  const tendencia = diferenca > 0 ? 'Aumento' : 'Redução'
 
   const handleAdicionarGasto = async (e) => {
     e.preventDefault()
@@ -590,6 +611,67 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
                 Saldo: R$ {saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Comparativo Mês a Mês */}
+      <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'} p-6 rounded-lg border`}>
+        <div className="flex items-center gap-3 mb-6">
+          <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            📈 Comparativo Mês a Mês
+          </h3>
+          {diferenca !== 0 && (
+            <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${
+              diferenca > 0 
+                ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200' 
+                : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+            }`}>
+              {diferenca > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+              <span className="text-sm font-bold">
+                {tendencia} R$ {Math.abs(diferenca).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={dadosComparativo}>
+            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#e5e7eb'} />
+            <XAxis dataKey="mes" stroke={isDark ? '#9ca3af' : '#6b7280'} />
+            <YAxis stroke={isDark ? '#9ca3af' : '#6b7280'} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: isDark ? '#1f2937' : '#fff',
+                border: '1px solid #10b981',
+                borderRadius: '8px',
+                color: isDark ? '#fff' : '#000'
+              }}
+              formatter={(value) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            />
+            <Legend />
+            <Bar dataKey="valor" fill="#10b981" name="Gasto Total" radius={[8, 8, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+
+        <div className="grid grid-cols-3 gap-4 mt-6">
+          <div className={`p-4 rounded-lg text-center ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+            <p className={`text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Julho</p>
+            <p className={`font-bold text-lg mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              R$ {julho.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className={`p-4 rounded-lg text-center ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+            <p className={`text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Agosto</p>
+            <p className={`font-bold text-lg mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              R$ {agosto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className={`p-4 rounded-lg text-center border-2 border-green-500 ${isDark ? 'bg-gray-700' : 'bg-green-50'}`}>
+            <p className={`text-sm font-semibold ${isDark ? 'text-green-300' : 'text-green-600'}`}>Setembro (Atual)</p>
+            <p className={`font-bold text-lg mt-1 ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+              R$ {setembro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
           </div>
         </div>
       </div>
