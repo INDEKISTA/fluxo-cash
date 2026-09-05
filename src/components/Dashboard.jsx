@@ -5,6 +5,7 @@ import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/fire
 import { LogOut } from 'lucide-react'
 import { ThemeContext } from '../ThemeContext'
 import TabGastos from './tabs/TabGastos'
+import TabParceladas from './tabs/TabParceladas'
 import TabPerfil from './tabs/TabPerfil'
 
 export default function Dashboard({ user }) {
@@ -152,14 +153,7 @@ export default function Dashboard({ user }) {
               )}
 
               {activeTab === 'parceladas' && (
-                <div className="text-center py-12">
-                  <p className="text-lg text-gray-500 dark:text-gray-400">
-                    📊 Funcionalidade em desenvolvimento
-                  </p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-                    Em breve você poderá gerenciar suas parceladas aqui
-                  </p>
-                </div>
+                <TabParceladas user={user} isDark={isDark} />
               )}
 
               {activeTab === 'dicas' && (
