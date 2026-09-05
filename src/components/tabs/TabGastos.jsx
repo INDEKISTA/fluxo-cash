@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
-import { Plus, Trash2, DollarSign, Edit2, Check, X, TrendingUp, TrendingDown } from 'lucide-react'
+import { Plus, Trash2, DollarSign, Edit2, Check, X, TrendingUp, TrendingDown, Download } from 'lucide-react'
 import { db } from '../../firebase'
 import { doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore'
 import { CATEGORIAS_PADRAO } from '../../categorias'
+import { exportarRelatorioPDF } from '../../utils/exportPDF'
 
 const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#06b6d4', '#14b8a6', '#6366f1', '#6b7280']
 
@@ -23,14 +24,25 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
   const [meta, setMeta] = useState(0)
   const [editandoMeta, setEditandoMeta] = useState(false)
   const [novoMeta, setNovoMeta] = useState('0')
+  const [nomePerfil, setNomePerfil] = useState('')
 
   useEffect(() => {
     carregarCategorias()
+    carregarMeta()
+    carregarPerfil()
   }, [user])
 
-  useEffect(() => {
-    carregarMeta()
-  }, [user])
+  const carregarPerfil = async () => {
+    try {
+      const docRef = doc(db, 'usuarios', user.uid, 'dados', 'perfil')
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        setNomePerfil(docSnap.data().nome || user.email)
+      }
+    } catch (error) {
+      console.error('Erro ao carregar perfil:', error)
+    }
+  }
 
   const carregarCategorias = async () => {
     try {
@@ -89,7 +101,6 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
 
   const totalGastosMes = gastosMes.reduce((acc, g) => acc + g.valor, 0)
 
-  // Calcular gastos dos últimos 3 meses
   const calcularGastosMes = (mes, ano) => {
     return gastos.filter(g => {
       const data = new Date(g.data?.toDate?.() || g.data)
@@ -613,6 +624,24 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
             </div>
           </div>
         </div>
+      </div>
+
+      {/* BOTÃO EXPORTAR RELATÓRIO 📄 */}
+      <div className={`${isDark ? 'bg-blue-900 border-blue-700' : 'bg-blue-50 border-blue-300'} p-4 rounded-lg border-2 flex justify-between items-center`}>
+        <div>
+          <h3 className={`font-bold text-lg ${isDark ? 'text-blue-200' : 'text-blue-900'}`}>
+            📄 Exportar Relatório
+          </h3>
+          <p className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
+            Baixe um PDF com resumo completo do mês
+          </p>
+        </div>
+        <button
+          onClick={() => exportarRelatorioPDF(nomePerfil, salario, totalGastosMes, gastosMes, gastosPorCategoria, nomeMes, isDark)}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 whitespace-nowrap"
+        >
+          <Download size={20} /> Gerar PDF
+        </button>
       </div>
 
       {/* Comparativo Mês a Mês */}
