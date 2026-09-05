@@ -5,6 +5,8 @@ import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/fire
 import { LogOut } from 'lucide-react'
 import { ThemeContext } from '../ThemeContext'
 import TabGastos from './tabs/TabGastos'
+import NotificacaoToast from './NotificacaoToast'
+import { verificarAlertas, gerarIdUnico } from '../utils/notificacoes'
 import TabParceladas from './tabs/TabParceladas'
 import TabPerfil from './tabs/TabPerfil'
 
@@ -14,6 +16,7 @@ export default function Dashboard({ user }) {
   const [gastos, setGastos] = useState([])
   const [salario, setSalario] = useState(0)
   const [nomePerfil, setNomePerfil] = useState('')
+    const [notificacoes, setNotificacoes] = useState([])
 
   // Carregar perfil do usuário
   useEffect(() => {
@@ -32,14 +35,21 @@ export default function Dashboard({ user }) {
   }, [user])
 
   // Monitorar gastos e salário em tempo real
-  useEffect(() => {
+    useEffect(() => {
     if (!user) return
     const q = query(collection(db, 'usuarios', user.uid, 'dados'))
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs
-      setGastos(docs.filter(d => d.data().tipo === 'gasto').map(d => ({ id: d.id, ...d.data() })))
+      const gastosData = docs.filter(d => d.data().tipo === 'gasto').map(d => ({ id: d.id, ...d.data() }))
+      setGastos(gastosData)
       const salarioDoc = docs.find(d => d.data().tipo === 'salario')
-      setSalario(salarioDoc?.data().valor || 0)
+      const salarioValue = salarioDoc?.data().valor || 0
+      setSalario(salarioValue)
+
+      // Verificar alertas
+      const totalGastosValue = gastosData.reduce((a, g) => a + g.valor, 0)
+      const alertas = verificarAlertas(salarioValue, totalGastosValue, gastosData, [])
+      setNotificacoes(alertas)
     })
     return () => unsubscribe()
   }, [user])
@@ -83,6 +93,10 @@ export default function Dashboard({ user }) {
               </button>
             </div>
           </div>
+                <NotificacaoToast 
+        notificacoes={notificacoes} 
+        removerNotificacao={(id) => setNotificacoes(notificacoes.filter(n => n.id !== id))}
+      />
         </header>
 
         <main className="max-w-6xl mx-auto p-4">
