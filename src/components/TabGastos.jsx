@@ -443,6 +443,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
               📊 Distribuição - {nomeMes}
             </h3>
             <div className="grid grid-cols-3 gap-4 items-center">
+              {/* Gráfico */}
               <div className="col-span-2">
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
@@ -472,6 +473,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
                 </ResponsiveContainer>
               </div>
 
+              {/* Cards */}
               <div className="space-y-3 col-span-1">
                 {maiorGasto && (
                   <div className={`p-3 rounded-lg ${isDark ? 'bg-red-900 text-red-200' : 'bg-red-50 text-red-900'}`}>
@@ -497,6 +499,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
               </div>
             </div>
 
+            {/* Legenda */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">
               {chartData.map((item, index) => (
                 <div key={index} className={`flex items-center gap-2 p-2 rounded ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
@@ -522,6 +525,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
           </div>
         )}
 
+        {/* Adicionar Gasto */}
         <div className="space-y-4">
           <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
             Adicionar Gasto
@@ -626,6 +630,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
         </div>
       </div>
 
+      {/* BOTÃO EXPORTAR RELATÓRIO 📄 */}
       <div className={`${isDark ? 'bg-blue-900 border-blue-700' : 'bg-blue-50 border-blue-300'} p-4 rounded-lg border-2 flex justify-between items-center`}>
         <div>
           <h3 className={`font-bold text-lg ${isDark ? 'text-blue-200' : 'text-blue-900'}`}>
@@ -643,10 +648,13 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
         </button>
       </div>
 
+      {/* RANKING DE GASTOS 🏆 */}
       <RankingGastos gastos={gastosMes} totalGastos={totalGastosMes} isDark={isDark} />
 
+      {/* GASTOS RECORRENTES 🔄 */}
       <GastosRecorrentes user={user} gastos={gastos} isDark={isDark} />
 
+      {/* Comparativo Mês a Mês */}
       <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'} p-6 rounded-lg border`}>
         <div className="flex items-center gap-3 mb-6">
           <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -707,6 +715,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
         </div>
       </div>
 
+      {/* Categorias */}
       {categorias.length > CATEGORIAS_PADRAO.length && (
         <div>
           <h3 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -740,6 +749,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
         </div>
       )}
 
+      {/* Lista de Gastos */}
       {gastosMes.length > 0 && (
         <div>
           <h3 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
