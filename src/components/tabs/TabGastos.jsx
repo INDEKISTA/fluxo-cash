@@ -1,15 +1,11 @@
-import { useState, useEffect, useContext } from 'react'
+import { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
-import { Plus, Trash2, DollarSign, Edit2, Check, X, TrendingUp, TrendingDown, Download, Trophy, Repeat2 } from 'lucide-react'
+import { Plus, Trash2, DollarSign, Edit2, Check, X, TrendingUp, TrendingDown, Download } from 'lucide-react'
 import { db } from '../../firebase'
 import { doc, setDoc, updateDoc, deleteDoc, getDoc, collection } from 'firebase/firestore'
 import { CATEGORIAS_PADRAO } from '../../categorias'
 import { exportarRelatorioPDF } from '../../utils/exportPDF'
-import RankingGastos from '../RankingGastos'
-import GastosRecorrentes from '../GastosRecorrentes'
-import ImportarCSV from '../ImportarCSV'
-import { marcarComoRecorrente } from '../../utils/gastosRecorrentes'
-import { salvarGastoOffline, obterGastosOffline } from '../../utils/offlineManager'
+import { salvarGastoOffline } from '../../utils/offlineManager'
 
 const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#06b6d4', '#14b8a6', '#6366f1', '#6b7280']
 
@@ -552,8 +548,6 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
             Adicionar Gasto
           </h3>
 
-          <ImportarCSV user={user} isDark={isDark} />
-
           <form onSubmit={handleAdicionarGasto} className="space-y-3">
             <input
               type="text"
@@ -670,10 +664,6 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
           <Download size={20} /> Gerar PDF
         </button>
       </div>
-
-      <RankingGastos gastos={gastosMes} totalGastos={totalGastosMes} isDark={isDark} />
-
-      <GastosRecorrentes user={user} gastos={gastos} isDark={isDark} />
 
       <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'} p-6 rounded-lg border`}>
         <div className="flex items-center gap-3 mb-6">
@@ -861,13 +851,6 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
                             <p className="font-bold text-green-600 dark:text-green-400">
                               R$ {gasto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </p>
-                            <button
-                              onClick={() => marcarComoRecorrente(db, user.uid, gasto.id, gasto)}
-                              className={`${isDark ? 'text-purple-400 hover:bg-purple-900' : 'text-purple-500 hover:bg-purple-50'} p-2 rounded`}
-                              title="Marcar como recorrente"
-                            >
-                              <Repeat2 size={18} />
-                            </button>
                             <button
                               onClick={() => handleEditarGasto(gasto)}
                               className={`${isDark ? 'text-blue-400 hover:bg-blue-900' : 'text-blue-500 hover:bg-blue-50'} p-2 rounded`}

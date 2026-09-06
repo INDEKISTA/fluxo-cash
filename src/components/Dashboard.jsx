@@ -9,6 +9,7 @@ import TabParceladas from './tabs/TabParceladas'
 import TabPerfil from './tabs/TabPerfil'
 import TabDicas from './tabs/TabDicas'
 import RelatorioComparativo from './RelatorioComparativo'
+import GraficoEvolucao from './GraficoEvolucao'
 import NotificacaoToast from './NotificacaoToast'
 import StatusOffline from './StatusOffline'
 import { obterGastosOffline } from '../utils/offlineManager'
@@ -162,7 +163,7 @@ export default function Dashboard({ user }) {
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
             <div className="flex border-b dark:border-gray-700 overflow-x-auto">
-              {['gastos', 'parceladas', 'relatorio', 'dicas', 'perfil'].map(tab => (
+              {['gastos', 'parceladas', 'relatorio', 'evolucao', 'dicas', 'perfil'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
                   className={`flex-shrink-0 py-4 px-6 font-semibold transition ${
                     activeTab === tab
@@ -172,6 +173,7 @@ export default function Dashboard({ user }) {
                   {tab === 'gastos' && '💳 Gastos'}
                   {tab === 'parceladas' && '📊 Parceladas'}
                   {tab === 'relatorio' && '📈 Relatório'}
+                  {tab === 'evolucao' && '📈 Evolução'}
                   {tab === 'dicas' && '💡 Dicas'}
                   {tab === 'perfil' && '👤 Perfil'}
                 </button>
@@ -182,6 +184,7 @@ export default function Dashboard({ user }) {
               {activeTab === 'gastos' && <TabGastos salario={salario} setSalario={setSalario} user={user} gastos={gastos} totalGastos={totalGastos} isDark={isDark} />}
               {activeTab === 'parceladas' && <TabParceladas user={user} isDark={isDark} />}
               {activeTab === 'relatorio' && <RelatorioComparativo gastos={gastos} isDark={isDark} />}
+              {activeTab === 'evolucao' && <GraficoEvolucao gastos={gastos} isDark={isDark} />}
               {activeTab === 'dicas' && <TabDicas user={user} gastos={gastos} salario={salario} isDark={isDark} />}
               {activeTab === 'perfil' && <TabPerfil user={user} isDark={isDark} />}
             </div>
