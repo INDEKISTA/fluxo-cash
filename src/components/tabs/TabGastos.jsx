@@ -6,6 +6,7 @@ import { doc, setDoc, updateDoc, deleteDoc, getDoc, collection } from 'firebase/
 import { CATEGORIAS_PADRAO } from '../../categorias'
 import { exportarRelatorioPDF } from '../../utils/exportPDF'
 import { salvarGastoOffline } from '../../utils/offlineManager'
+import SeletorMes from '../SeletorMes'
 
 const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#06b6d4', '#14b8a6', '#6366f1', '#6b7280']
 
@@ -26,12 +27,19 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
   const [editandoMeta, setEditandoMeta] = useState(false)
   const [novoMeta, setNovoMeta] = useState('0')
   const [nomePerfil, setNomePerfil] = useState('')
+  const [mesSelecionado, setMesSelecionado] = useState(new Date().getMonth())
+  const [anoSelecionado, setAnoSelecionado] = useState(new Date().getFullYear())
 
   useEffect(() => {
     carregarCategorias()
     carregarMeta()
     carregarPerfil()
   }, [user])
+
+  const handleMudarMes = (novoMes, novoAno) => {
+    setMesSelecionado(novoMes)
+    setAnoSelecionado(novoAno)
+  }
 
   const carregarPerfil = async () => {
     try {
@@ -92,12 +100,10 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
     }
   }
 
-  const mesAtual = new Date().getMonth()
-  const anoAtual = new Date().getFullYear()
-
+  // Filtrar gastos pelo mês selecionado
   const gastosMes = gastos.filter(g => {
     const data = new Date(g.data?.toDate?.() || g.data)
-    return data.getMonth() === mesAtual && data.getFullYear() === anoAtual
+    return data.getMonth() === mesSelecionado && data.getFullYear() === anoSelecionado
   })
 
   const totalGastosMes = gastosMes.reduce((acc, g) => acc + g.valor, 0)
@@ -139,7 +145,6 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
       recorrente: false
     }
 
-    // 🟢 SE ONLINE = SALVA NO FIREBASE
     if (navigator.onLine) {
       try {
         const novoGastoId = Date.now().toString()
@@ -152,9 +157,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
         console.error('Erro:', error)
         alert('Erro ao adicionar gasto: ' + error.message)
       }
-    } 
-    // 🔴 SE OFFLINE = SALVA LOCALMENTE
-    else {
+    } else {
       try {
         salvarGastoOffline(user.uid, gastoData)
         setNovoGastoNome('')
@@ -262,8 +265,8 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
       await setDoc(doc(db, 'usuarios', user.uid, 'dados', 'meta'), {
         tipo: 'meta',
         valor: valorMeta,
-        mes: mesAtual,
-        ano: anoAtual
+        mes: mesSelecionado,
+        ano: anoSelecionado
       })
       setMeta(valorMeta)
       setEditandoMeta(false)
@@ -308,7 +311,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
 
   const saldo = salario - totalGastosMes
   const percentualGasto = salario > 0 ? (totalGastosMes / salario * 100).toFixed(1) : 0
-  const nomeMes = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const nomeMes = new Date(anoSelecionado, mesSelecionado, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
   const maiorGasto = Object.entries(gastosPorCategoria).length > 0 
     ? Object.entries(gastosPorCategoria).reduce((a, b) => b[1].value > a[1].value ? b : a)
@@ -324,6 +327,14 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
 
   return (
     <div className="space-y-6">
+      {/* Seletor de Mês */}
+      <SeletorMes 
+        mesSelecionado={mesSelecionado}
+        anoSelecionado={anoSelecionado}
+        onMudarMes={handleMudarMes}
+        isDark={isDark}
+      />
+
       {/* Salário */}
       <div className={`bg-gradient-to-r from-green-500 to-blue-500 dark:from-green-700 dark:to-blue-700 text-white p-6 rounded-lg`}>
         <div className="flex justify-between items-center">
@@ -539,7 +550,7 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
           </div>
         ) : (
           <div className={`${isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'} p-6 rounded-lg text-center`}>
-            <p>Nenhum gasto registrado</p>
+            <p>Nenhum gasto registrado para {nomeMes}</p>
           </div>
         )}
 
