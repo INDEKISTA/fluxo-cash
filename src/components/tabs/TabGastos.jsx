@@ -7,6 +7,7 @@ import { CATEGORIAS_PADRAO } from '../../categorias'
 import { exportarRelatorioPDF } from '../../utils/exportPDF'
 import RankingGastos from '../RankingGastos'
 import GastosRecorrentes from '../GastosRecorrentes'
+import ImportarCSV from '../ImportarCSV'
 import { marcarComoRecorrente } from '../../utils/gastosRecorrentes'
 import { salvarGastoOffline, obterGastosOffline } from '../../utils/offlineManager'
 
@@ -550,6 +551,9 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
           <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
             Adicionar Gasto
           </h3>
+
+          <ImportarCSV user={user} isDark={isDark} />
+
           <form onSubmit={handleAdicionarGasto} className="space-y-3">
             <input
               type="text"
