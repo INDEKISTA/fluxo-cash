@@ -1,15 +1,18 @@
 import { useState, useEffect, useContext } from 'react'
 import { auth, db } from '../firebase'
 import { signOut } from 'firebase/auth'
-import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore'
+import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore'
 import { LogOut } from 'lucide-react'
 import { ThemeContext } from '../ThemeContext'
 import TabGastos from './tabs/TabGastos'
 import TabParceladas from './tabs/TabParceladas'
 import TabPerfil from './tabs/TabPerfil'
 import TabDicas from './tabs/TabDicas'
+import RelatorioComparativo from './RelatorioComparativo'
 import NotificacaoToast from './NotificacaoToast'
-import { verificarAlertas, gerarIdUnico } from '../utils/notificacoes'
+import StatusOffline from './StatusOffline'
+import { obterGastosOffline } from '../utils/offlineManager'
+import { verificarAlertas } from '../utils/notificacoes'
 
 export default function Dashboard({ user }) {
   const { isDark, toggleTheme } = useContext(ThemeContext)
@@ -36,20 +39,63 @@ export default function Dashboard({ user }) {
 
   useEffect(() => {
     if (!user) return
-    const q = query(collection(db, 'usuarios', user.uid, 'dados'))
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs
-      const gastosData = docs.filter(d => d.data().tipo === 'gasto').map(d => ({ id: d.id, ...d.data() }))
-      setGastos(gastosData)
-      const salarioDoc = docs.find(d => d.data().tipo === 'salario')
-      const salarioValue = salarioDoc?.data().valor || 0
-      setSalario(salarioValue)
 
-      // Verificar alertas
-      const totalGastosValue = gastosData.reduce((a, g) => a + g.valor, 0)
-      const alertas = verificarAlertas(salarioValue, totalGastosValue, gastosData, [])
-      setNotificacoes(alertas)
-    })
+    // 📱 SE OFFLINE = CARREGA DO LOCALSTORAGE
+    if (!navigator.onLine) {
+      console.log('🔴 OFFLINE - Carregando do localStorage...')
+      const gastosOffline = obterGastosOffline(user.uid)
+      setGastos(gastosOffline)
+      
+      const salarioSalvo = localStorage.getItem(`salario_${user.uid}`)
+      if (salarioSalvo) {
+        setSalario(parseFloat(salarioSalvo))
+      }
+      console.log('✅ Dados carregados do localStorage')
+      return
+    }
+
+    // 🟢 SE ONLINE = CARREGA DO FIREBASE
+    console.log('🟢 ONLINE - Carregando do Firebase...')
+    const q = query(collection(db, 'usuarios', user.uid, 'dados'))
+    
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const docs = snapshot.docs
+        const gastosData = docs
+          .filter(d => d.data().tipo === 'gasto')
+          .map(d => ({ id: d.id, ...d.data() }))
+
+        setGastos(gastosData)
+
+        const salarioDoc = docs.find(d => d.data().tipo === 'salario')
+        const salarioValue = salarioDoc?.data().valor || 0
+        setSalario(salarioValue)
+
+        // 💾 SALVA NO LOCALSTORAGE
+        localStorage.setItem(`salario_${user.uid}`, salarioValue.toString())
+        localStorage.setItem(`gastos_${user.uid}`, JSON.stringify(gastosData))
+
+        const totalGastosValue = gastosData.reduce((a, g) => a + g.valor, 0)
+        const alertas = verificarAlertas(salarioValue, totalGastosValue, gastosData, [])
+        setNotificacoes(alertas)
+
+        console.log('✅ Dados carregados do Firebase')
+      },
+      (error) => {
+        console.error('❌ Erro Firebase:', error)
+        console.log('📂 Tentando carregar do localStorage...')
+        
+        const gastosLocal = JSON.parse(localStorage.getItem(`gastos_${user.uid}`) || '[]')
+        const salarioLocal = parseFloat(localStorage.getItem(`salario_${user.uid}`) || '0')
+        
+        setGastos(gastosLocal)
+        setSalario(salarioLocal)
+        
+        console.log('✅ Dados carregados do localStorage (fallback)')
+      }
+    )
+
     return () => unsubscribe()
   }, [user])
 
@@ -72,6 +118,8 @@ export default function Dashboard({ user }) {
           notificacoes={notificacoes} 
           removerNotificacao={(id) => setNotificacoes(notificacoes.filter(n => n.id !== id))}
         />
+
+        <StatusOffline />
 
         <header className="bg-gradient-to-r from-green-500 to-blue-500 dark:from-green-700 dark:to-blue-700 text-white p-4 shadow-lg transition-colors sticky top-0 z-50">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
@@ -114,7 +162,7 @@ export default function Dashboard({ user }) {
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
             <div className="flex border-b dark:border-gray-700 overflow-x-auto">
-              {['gastos', 'parceladas', 'dicas', 'perfil'].map(tab => (
+              {['gastos', 'parceladas', 'relatorio', 'dicas', 'perfil'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
                   className={`flex-shrink-0 py-4 px-6 font-semibold transition ${
                     activeTab === tab
@@ -123,6 +171,7 @@ export default function Dashboard({ user }) {
                   }`}>
                   {tab === 'gastos' && '💳 Gastos'}
                   {tab === 'parceladas' && '📊 Parceladas'}
+                  {tab === 'relatorio' && '📈 Relatório'}
                   {tab === 'dicas' && '💡 Dicas'}
                   {tab === 'perfil' && '👤 Perfil'}
                 </button>
@@ -132,6 +181,7 @@ export default function Dashboard({ user }) {
             <div className="p-6 dark:text-gray-100">
               {activeTab === 'gastos' && <TabGastos salario={salario} setSalario={setSalario} user={user} gastos={gastos} totalGastos={totalGastos} isDark={isDark} />}
               {activeTab === 'parceladas' && <TabParceladas user={user} isDark={isDark} />}
+              {activeTab === 'relatorio' && <RelatorioComparativo gastos={gastos} isDark={isDark} />}
               {activeTab === 'dicas' && <TabDicas user={user} gastos={gastos} salario={salario} isDark={isDark} />}
               {activeTab === 'perfil' && <TabPerfil user={user} isDark={isDark} />}
             </div>

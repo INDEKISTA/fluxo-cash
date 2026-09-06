@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { Plus, Trash2, DollarSign, Edit2, Check, X, TrendingUp, TrendingDown, Download, Trophy, Repeat2 } from 'lucide-react'
 import { db } from '../../firebase'
-import { doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore'
+import { doc, setDoc, updateDoc, deleteDoc, getDoc, collection } from 'firebase/firestore'
 import { CATEGORIAS_PADRAO } from '../../categorias'
 import { exportarRelatorioPDF } from '../../utils/exportPDF'
 import RankingGastos from '../RankingGastos'
 import GastosRecorrentes from '../GastosRecorrentes'
 import { marcarComoRecorrente } from '../../utils/gastosRecorrentes'
+import { salvarGastoOffline, obterGastosOffline } from '../../utils/offlineManager'
 
 const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#06b6d4', '#14b8a6', '#6366f1', '#6b7280']
 
@@ -126,25 +127,48 @@ export default function TabGastos({ salario, setSalario, user, gastos, totalGast
 
   const handleAdicionarGasto = async (e) => {
     e.preventDefault()
-    if (!novoGastoNome || !novoGastoValor) return
+    if (!novoGastoNome || !novoGastoValor) {
+      alert('Preencha todos os campos!')
+      return
+    }
 
-    try {
-      const novoGastoId = Date.now().toString()
-      await setDoc(doc(db, 'usuarios', user.uid, 'dados', novoGastoId), {
-        tipo: 'gasto',
-        nome: novoGastoNome,
-        valor: parseFloat(novoGastoValor),
-        categoria: novoGastoCategoria,
-        data: new Date(),
-        pago: false,
-        recorrente: false
-      })
-      setNovoGastoNome('')
-      setNovoGastoValor('')
-      setNovoGastoCategoria('outros')
-    } catch (error) {
-      console.error('Erro ao adicionar gasto:', error)
-      alert('Erro ao adicionar gasto: ' + error.message)
+    const gastoData = {
+      tipo: 'gasto',
+      nome: novoGastoNome,
+      valor: parseFloat(novoGastoValor),
+      categoria: novoGastoCategoria,
+      data: new Date(),
+      pago: false,
+      recorrente: false
+    }
+
+    // 🟢 SE ONLINE = SALVA NO FIREBASE
+    if (navigator.onLine) {
+      try {
+        const novoGastoId = Date.now().toString()
+        await setDoc(doc(db, 'usuarios', user.uid, 'dados', novoGastoId), gastoData)
+        setNovoGastoNome('')
+        setNovoGastoValor('')
+        setNovoGastoCategoria('outros')
+        alert('✅ Gasto adicionado!')
+      } catch (error) {
+        console.error('Erro:', error)
+        alert('Erro ao adicionar gasto: ' + error.message)
+      }
+    } 
+    // 🔴 SE OFFLINE = SALVA LOCALMENTE
+    else {
+      try {
+        salvarGastoOffline(user.uid, gastoData)
+        setNovoGastoNome('')
+        setNovoGastoValor('')
+        setNovoGastoCategoria('outros')
+        alert('📱 Gasto salvo offline! Sincronizará quando conectar.')
+        setTimeout(() => window.location.reload(), 500)
+      } catch (error) {
+        console.error('Erro offline:', error)
+        alert('Erro ao salvar: ' + error.message)
+      }
     }
   }
 
